@@ -14,6 +14,10 @@ Versões: [web](https://humbertodias.github.io/lupi-sf/) | [desktop](https://git
 lupinho sf.lupi
 ```
 
+
+https://github.com/user-attachments/assets/db8e53e6-7803-466e-a1fa-b5fb1f4e814d
+
+
 <details>
   <summary>Controles</summary>
 
