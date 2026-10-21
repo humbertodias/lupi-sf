@@ -762,61 +762,64 @@ function Fighter:draw_body()
   local gi = self.style == "ken" and Screen.KEN or Screen.GI
   local hair = self.style == "ken" and Screen.BLONDE or Screen.HAIR
   local bob = (math.floor(self.t / 18) % 2) == 0 and 0 or 1
-  local step = (math.floor(self.t / 5) % 2) == 0 and 4 or -2
+  local step = (math.floor(self.t / 5) % 2) == 0 and 8 or -4
   if pose == "down" then
-    self:box(-22, 0, 34, 10, gi)
-    self:box(10, 2, 12, 11, Screen.SKIN)
-    self:box(10, 11, 12, 4, hair)
+    self:box(-44, 0, 68, 20, gi)
+    self:box(20, 4, 24, 22, Screen.SKIN)
+    self:box(20, 22, 24, 8, hair)
     return
   end
   local crouch = pose == "crouch" or pose == "crouch_punch" or pose == "sweep"
-  local leg_h = crouch and 10 or 18
-  local body_y = crouch and 8 or 16
-  local head_y = (crouch and 20 or 30) + bob
+  local leg_h = crouch and 20 or 36
+  local body_y = crouch and 16 or 32
+  local head_y = (crouch and 40 or 60) + bob
   if pose == "rise" or pose == "fall" then
-    self:box(-8, 8, 7, 12, Screen.BOOT)
-    self:box(1, 6, 7, 12, Screen.BOOT)
+    self:box(-16, 16, 14, 24, Screen.BOOT)
+    self:box(2, 12, 14, 24, Screen.BOOT)
   elseif pose == "walk" or pose == "dash" then
-    self:box(-8, 0, 6, leg_h, Screen.BOOT)
-    self:box(2 + step, 0, 6, leg_h, Screen.BOOT)
+    self:box(-16, 0, 12, leg_h, Screen.BOOT)
+    self:box(4 + step, 0, 12, leg_h, Screen.BOOT)
   elseif pose == "kick" then
-    self:box(-8, 0, 6, leg_h, Screen.BOOT)
-    self:box(2, 14, 26, 6, Screen.BOOT)
+    self:box(-16, 0, 12, leg_h, Screen.BOOT)
+    self:box(4, 28, 52, 12, Screen.BOOT)
   elseif pose == "sweep" then
-    self:box(-8, 0, 6, 8, Screen.BOOT)
-    self:box(0, 2, 30, 6, Screen.BOOT)
+    self:box(-16, 0, 12, 16, Screen.BOOT)
+    self:box(0, 4, 60, 12, Screen.BOOT)
   else
-    self:box(-7, 0, 6, leg_h, Screen.BOOT)
-    self:box(1, 0, 6, leg_h, Screen.BOOT)
+    self:box(-14, 0, 12, leg_h, Screen.BOOT)
+    self:box(2, 0, 12, leg_h, Screen.BOOT)
   end
-  self:box(-8, body_y, 16, crouch and 12 or 16, gi)
-  self:box(-6, body_y + 4, 12, 3, Screen.BELT)
-  self:box(-6, head_y, 12, 12, Screen.SKIN)
-  self:box(-7, head_y + 8, 14, 6, hair)
-  if self.style == "ryu" then self:box(-7, head_y + 7, 14, 3, Screen.BAND) end
-  self:box(2, head_y + 4, 2, 2, Screen.HAIR)
-  if pose == "punch" or pose == "crouch_punch" or pose == "hadou" or pose == "throw" then
-    local len = pose == "hadou" and 16 or 22
-    self:box(6, body_y + 4, len, 6, gi)
-    self:box(4 + len, body_y + 3, 6, 8, Screen.RED)
+  self:box(-16, body_y, 32, crouch and 24 or 32, gi)
+  self:box(-12, body_y + 8, 24, 6, Screen.BELT)
+  self:box(-12, head_y, 24, 24, Screen.SKIN)
+  self:box(-14, head_y + 16, 28, 12, hair)
+  if self.style == "ryu" then self:box(-14, head_y + 14, 28, 6, Screen.BAND) end
+  self:box(4, head_y + 8, 4, 4, Screen.HAIR)
+  if pose == "hadou" then
+    -- A magia nasce em (53, 55). A luva fica nesse ponto, nao na cabeca.
+    self:box(10, 48, 32, 12, gi)
+    self:box(40, 48, 14, 14, Screen.RED)
+  elseif pose == "punch" or pose == "crouch_punch" or pose == "throw" then
+    self:box(12, body_y + 8, 44, 12, gi)
+    self:box(52, body_y + 6, 12, 16, Screen.RED)
   elseif pose == "dp" or pose == "win" then
-    self:box(2, head_y + 4, 6, 16, gi)
-    self:box(2, head_y + 18, 6, 6, Screen.RED)
+    self:box(4, head_y + 8, 12, 32, gi)
+    self:box(4, head_y + 36, 12, 12, Screen.RED)
   elseif pose == "block" then
-    self:box(4, body_y + 2, 8, 14, gi)
+    self:box(8, body_y + 4, 16, 28, gi)
   elseif pose == "tatsu" then
     local spin = math.floor(self.t / 2) % 2
-    self:box(-18, 10, 36, 8, spin == 0 and gi or Screen.RED)
+    self:box(-36, 20, 72, 16, spin == 0 and gi or Screen.RED)
   elseif pose == "hit" then
-    self:box(-16, body_y + 6, 8, 6, gi)
+    self:box(-32, body_y + 12, 16, 12, gi)
   else
-    self:box(6, body_y + 2, 6, 12, gi)
-    self:box(-12, body_y + 2, 6, 12, gi)
+    self:box(12, body_y + 4, 12, 24, gi)
+    self:box(-24, body_y + 4, 12, 24, gi)
   end
 end
 
 function Fighter:draw()
-  Screen.rect(self.x - 14, self.y - 3, 28, 3, Screen.SHADOW)
+  Screen.rect(self.x - 28, self.y - 4, 56, 4, Screen.SHADOW)
   if not self:draw_sheet() then self:draw_body() end
 end
 
