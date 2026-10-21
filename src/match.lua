@@ -9,6 +9,8 @@ local Defs = require "defs"
 
 local GAP = 30
 local ROUND_TIME = 60 * 60
+local INTRO_TIME = 36
+local INTRO_CALL = 16
 
 local Match = {}
 Match.__index = Match
@@ -17,7 +19,7 @@ function Match.new(app)
   local self = setmetatable({
     app = app,
     mode = "intro",
-    intro_t = 70,
+    intro_t = INTRO_TIME,
     outro_t = 0,
     time = ROUND_TIME,
     round = 1,
@@ -411,7 +413,7 @@ function Match:after_outro()
   self.round = self.round + 1
   self.time = ROUND_TIME
   self.mode = "intro"
-  self.intro_t = 70
+  self.intro_t = INTRO_TIME
   self.balls = {}
   self.sparks = {}
   self.hitstop = 0
@@ -532,7 +534,7 @@ end
 
 function Match:draw_banner()
   if self.mode == "intro" then
-    if self.intro_t > 30 then
+    if self.intro_t > INTRO_CALL then
       Screen.print_c("ROUND " .. tostring(self.round), 108, Screen.WHITE)
     else
       Screen.print_c("LUTA", 108, Screen.YELLOW)
