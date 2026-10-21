@@ -455,9 +455,10 @@ function Fighter:locomotion()
   if self.dead or self.stun > 0 or self.state == "win" or self.state == "ko" then return end
   local name = self.state_name
   local free = name == "Stand" or name == "Walk Forward" or name == "Walk Backward"
-    or name == "Crouch" or name == "Front Dash" or name == "Back Dash"
+    or name == "Crouch"
+  local dashing = name == "Front Dash" or name == "Back Dash"
   if not self:jump_held() then self.jump_lock = false end
-  if not free then return end
+  if not free and not dashing then return end
   local pad = self.pad
   if self:jump_held() then
     if not self.jump_lock then
@@ -470,6 +471,7 @@ function Fighter:locomotion()
     end
     return
   end
+  if dashing then return end
   if self.motion:dash() and not pad.down then
     self:begin_state("Front Dash")
     return
