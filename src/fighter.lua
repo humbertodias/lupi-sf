@@ -715,16 +715,56 @@ function Fighter:hurt_aabb()
 end
 
 function Fighter:pose()
-  if self.state == "ko" or self.state == "down" then return "down" end
+  local name = self.state_name or ""
+  if self.state == "ko" or name == "Defeated Tummble Landing" then return "down" end
+  if name == "Crouch Roundhouse" then return "sweep" end
+  if name:find("Tummble", 1, true) then
+    if self.airborne or name:find("Hit", 1, true) then return "fall" end
+    if name:find("Landing", 1, true) and (self.anim_i or 1) >= 12 then return "rise" end
+    return "down"
+  end
+  if name:find("Landing", 1, true) then return "land" end
+  if name == "Shoryuken Fall" or name == "Tatsumakifall" then return "jump" end
   if self.state == "win" then return "win" end
+  if name:find("Crouch", 1, true) and name:find("Hit", 1, true) then return "crouch_hit" end
+  if name:find("Low ", 1, true) then return "low_hit" end
+  if self.airborne and (self.state == "hit" or self.state == "launch") then return "air_hit" end
   if self.state == "hit" or self.state == "launch" then return "hit" end
-  if self.state == "block" then return self.pad.down and "crouch" or "block" end
+  if self.state == "block" then
+    return (self.pad and self.pad.down) and "crouch_block" or "block"
+  end
   if self.kind == "dp" then return "dp" end
   if self.kind == "tatsu" then return "tatsu" end
   if self.kind == "hadou" then return "hadou" end
   if self.kind == "throw" then return "throw" end
+  if name:find("Aerial", 1, true) then
+    if name:find("Jab", 1, true) or name:find("Strong", 1, true) or name:find("Fierce", 1, true) then
+      return "air_punch"
+    end
+    return "air_kick"
+  end
+  if name:find("Crouch Jab", 1, true) or name:find("Crouch Strong", 1, true) or name:find("Crouch Fierce", 1, true) then
+    return "crouch_punch"
+  end
+  if name:find("Crouch Short", 1, true) or name:find("Crouch Forward", 1, true) then
+    return "crouch_kick"
+  end
+  if name:find("Stand Jab", 1, true) or name:find("Stand Strong", 1, true) or name:find("Stand Fierce", 1, true) then
+    return "punch"
+  end
+  if name:find("Stand Short", 1, true) or name:find("Stand Forward", 1, true) or name:find("Stand Roundhouse", 1, true) then
+    return "kick"
+  end
+  if name:find("Jump", 1, true) then
+    if name:find("Front", 1, true) then return "jump_f" end
+    if name:find("Back", 1, true) then return "jump_b" end
+    return "jump"
+  end
+  if name:find("Dash", 1, true) then
+    return name:find("Back", 1, true) and "dash_b" or "dash"
+  end
   if self.state == "crouch" then return "crouch" end
-  if self.state == "walk" or self.state == "dash" then return "walk" end
+  if self.state == "walk" then return "walk" end
   return "idle"
 end
 
@@ -764,57 +804,153 @@ function Fighter:draw_body()
   local bob = (math.floor(self.t / 18) % 2) == 0 and 0 or 1
   local step = (math.floor(self.t / 5) % 2) == 0 and 8 or -4
   if pose == "down" then
-    self:box(-44, 0, 68, 20, gi)
-    self:box(20, 4, 24, 22, Screen.SKIN)
-    self:box(20, 22, 24, 8, hair)
+    self:box(-52, 0, 76, 16, gi)
+    self:box(20, 2, 22, 16, Screen.SKIN)
+    self:box(22, 12, 20, 8, hair)
+    self:box(-48, 0, 18, 10, Screen.BOOT)
     return
   end
-  local crouch = pose == "crouch" or pose == "crouch_punch" or pose == "sweep"
+  if pose == "fall" then
+    local spin = math.floor(self.t / 4) % 2
+    local lift = spin == 0 and 22 or 40
+    self:box(-40, lift, 72, 16, gi)
+    self:box(26, lift + 2, 20, 16, Screen.SKIN)
+    self:box(28, lift + 12, 18, 8, hair)
+    self:box(-52, lift, 16, 12, Screen.BOOT)
+    return
+  end
+  if pose == "rise" then
+    self:box(-24, 0, 52, 20, gi)
+    self:box(22, 10, 18, 18, Screen.SKIN)
+    self:box(24, 22, 16, 8, hair)
+    self:box(-40, 0, 20, 10, Screen.BOOT)
+    self:box(6, 0, 10, 24, gi)
+    return
+  end
+  if pose == "sweep" then
+    local i = self.anim_i or 1
+    self:box(-18, 0, 14, 18, Screen.BOOT)
+    if i <= 2 then
+      self:box(-46, 8, 30, 12, Screen.BOOT)
+    else
+      local reach = (i >= 9) and 36 or 68
+      self:box(2, 2, reach, 12, Screen.BOOT)
+    end
+    self:box(-22, 14, 38, 22, gi)
+    self:box(-10, 32, 22, 18, Screen.SKIN)
+    self:box(-12, 44, 24, 10, hair)
+    if self.style == "ryu" then self:box(-12, 42, 24, 5, Screen.BAND) end
+    self:box(-40, 0, 14, 12, gi)
+    return
+  end
+  local name = self.state_name or ""
+  local st = self:cur_state()
+  local n = st and #st.frames or 1
+  local i = self.anim_i or 1
+  local wind = i <= math.max(1, math.floor(n * 0.28))
+  local recover = i >= math.max(1, math.ceil(n * 0.72))
+  local function torso(ox, by, hy, bh)
+    self:box(-16 + ox, by, 32, bh, gi)
+    self:box(-12 + ox, by + math.floor(bh * 0.35), 24, 6, Screen.BELT)
+    self:box(-12 + ox, hy, 24, 24, Screen.SKIN)
+    self:box(-14 + ox, hy + 16, 28, 12, hair)
+    if self.style == "ryu" then self:box(-14 + ox, hy + 14, 28, 6, Screen.BAND) end
+    self:box(4 + ox, hy + 8, 4, 4, Screen.HAIR)
+  end
+  if pose == "jump" or pose == "jump_f" or pose == "jump_b"
+    or pose == "air_punch" or pose == "air_kick" or pose == "air_hit" then
+    local lean = pose == "jump_f" and 12 or pose == "jump_b" and -12 or 0
+    if pose == "air_hit" then lean = -16 end
+    self:box(-12 + lean, 6, 16, 18, Screen.BOOT)
+    self:box(8 + lean, 8, 16, 16, Screen.BOOT)
+    torso(lean, 24, 50, 28)
+    if pose == "air_punch" then
+      local reach = wind and 16 or recover and 24 or 40
+      self:box(12 + lean, 32, reach, 12, gi)
+      self:box(10 + lean + reach, 30, 12, 14, Screen.RED)
+    elseif pose == "air_kick" then
+      local high = name:find("Roundhouse", 1, true)
+      local reach = wind and 18 or recover and 28 or (high and 46 or 52)
+      local ky = high and 40 or 18
+      if wind then ky = 28 end
+      self:box(10 + lean, ky, reach, 12, Screen.BOOT)
+    elseif pose == "air_hit" then
+      self:box(-28 + lean, 36, 16, 12, gi)
+    else
+      self:box(8 + lean, 30, 12, 20, gi)
+      self:box(-22 + lean, 30, 12, 20, gi)
+    end
+    return
+  end
+  local crouch = pose == "crouch" or pose == "crouch_punch" or pose == "crouch_kick"
+    or pose == "crouch_hit" or pose == "crouch_block" or pose == "land"
   local leg_h = crouch and 20 or 36
   local body_y = crouch and 16 or 32
   local head_y = (crouch and 40 or 60) + bob
-  if pose == "rise" or pose == "fall" then
-    self:box(-16, 16, 14, 24, Screen.BOOT)
-    self:box(2, 12, 14, 24, Screen.BOOT)
-  elseif pose == "walk" or pose == "dash" then
-    self:box(-16, 0, 12, leg_h, Screen.BOOT)
-    self:box(4 + step, 0, 12, leg_h, Screen.BOOT)
-  elseif pose == "kick" then
-    self:box(-16, 0, 12, leg_h, Screen.BOOT)
-    self:box(4, 28, 52, 12, Screen.BOOT)
-  elseif pose == "sweep" then
-    self:box(-16, 0, 12, 16, Screen.BOOT)
-    self:box(0, 4, 60, 12, Screen.BOOT)
+  if pose == "low_hit" then
+    body_y = 22
+    head_y = 44
+  end
+  local lean = 0
+  if pose == "dash" then lean = 8
+  elseif pose == "dash_b" or pose == "hit" or pose == "low_hit" or pose == "crouch_hit" then lean = -8
+  end
+  if pose == "kick" or pose == "crouch_kick" then
+    self:box(-16, 0, 12, pose == "crouch_kick" and 16 or leg_h, Screen.BOOT)
+    local reach, ky = 44, 8
+    if name:find("Forward", 1, true) then reach, ky = 56, pose == "crouch_kick" and 6 or 28 end
+    if name:find("Roundhouse", 1, true) then reach, ky = 42, 50 end
+    if wind then
+      self:box(-40, 16, 28, 12, Screen.BOOT)
+    else
+      if recover then reach = math.floor(reach * 0.55) end
+      self:box(4, ky, reach, 12, Screen.BOOT)
+    end
+  elseif pose == "walk" or pose == "dash" or pose == "dash_b" then
+    self:box(-16 + lean, 0, 12, leg_h, Screen.BOOT)
+    self:box(4 + step + lean, 0, 12, leg_h, Screen.BOOT)
   else
     self:box(-14, 0, 12, leg_h, Screen.BOOT)
     self:box(2, 0, 12, leg_h, Screen.BOOT)
   end
-  self:box(-16, body_y, 32, crouch and 24 or 32, gi)
-  self:box(-12, body_y + 8, 24, 6, Screen.BELT)
-  self:box(-12, head_y, 24, 24, Screen.SKIN)
-  self:box(-14, head_y + 16, 28, 12, hair)
-  if self.style == "ryu" then self:box(-14, head_y + 14, 28, 6, Screen.BAND) end
-  self:box(4, head_y + 8, 4, 4, Screen.HAIR)
+  local head_ox = pose == "crouch_hit" and lean - 6 or lean
+  torso(head_ox, body_y, head_y, crouch and 24 or 32)
   if pose == "hadou" then
     -- A magia nasce em (53, 55). A luva fica nesse ponto, nao na cabeca.
     self:box(10, 48, 32, 12, gi)
     self:box(40, 48, 14, 14, Screen.RED)
-  elseif pose == "punch" or pose == "crouch_punch" or pose == "throw" then
-    self:box(12, body_y + 8, 44, 12, gi)
-    self:box(52, body_y + 6, 12, 16, Screen.RED)
+  elseif pose == "punch" or pose == "crouch_punch" then
+    local up = pose == "crouch_punch" and name:find("Fierce", 1, true)
+    if up and not wind then
+      local h = recover and 18 or 32
+      self:box(2, body_y + 18, 12, h, gi)
+      self:box(0, body_y + 16 + h, 14, 14, Screen.RED)
+    else
+      local reach = 30
+      if name:find("Strong", 1, true) then reach = 42 end
+      if name:find("Fierce", 1, true) then reach = 54 end
+      if wind then reach = 16 elseif recover then reach = math.floor(reach * 0.5) end
+      self:box(10, body_y + 8, reach, 12, gi)
+      self:box(8 + reach, body_y + 6, 12, 16, Screen.RED)
+    end
+  elseif pose == "throw" then
+    self:box(8, body_y + 10, 36, 10, gi)
+    self:box(8, body_y + 22, 36, 10, gi)
+    self:box(40, body_y + 8, 12, 14, Screen.RED)
+    self:box(40, body_y + 22, 12, 14, Screen.RED)
   elseif pose == "dp" or pose == "win" then
     self:box(4, head_y + 8, 12, 32, gi)
     self:box(4, head_y + 36, 12, 12, Screen.RED)
-  elseif pose == "block" then
+  elseif pose == "block" or pose == "crouch_block" or pose == "crouch_hit" then
     self:box(8, body_y + 4, 16, 28, gi)
   elseif pose == "tatsu" then
     local spin = math.floor(self.t / 2) % 2
     self:box(-36, 20, 72, 16, spin == 0 and gi or Screen.RED)
-  elseif pose == "hit" then
-    self:box(-32, body_y + 12, 16, 12, gi)
+  elseif pose == "hit" or pose == "low_hit" then
+    self:box(-32 + lean, body_y + 12, 16, 12, gi)
   else
-    self:box(12, body_y + 4, 12, 24, gi)
-    self:box(-24, body_y + 4, 12, 24, gi)
+    self:box(12 + lean, body_y + 4, 12, 24, gi)
+    self:box(-24 + lean, body_y + 4, 12, 24, gi)
   end
 end
 
