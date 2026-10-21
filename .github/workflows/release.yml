@@ -1,0 +1,54 @@
+name: Release
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout game
+        uses: actions/checkout@v7
+        with:
+          submodules: true
+
+      - name: Install tools
+        run: |
+          set -euo pipefail
+          sudo apt-get update
+          sudo apt-get install -y lua5.4 zip imagemagick
+          sudo ln -sf "$(command -v lua5.4)" /usr/local/bin/lua
+          if ! command -v magick >/dev/null; then
+            printf '%s\n' \
+              '#!/bin/sh' \
+              'if [ "${1-}" = "identify" ]; then' \
+              '  shift' \
+              '  exec identify "$@"' \
+              'fi' \
+              'exec convert "$@"' \
+              | sudo tee /usr/local/bin/magick >/dev/null
+            sudo chmod +x /usr/local/bin/magick
+          fi
+          convert -size 2x2 xc:red /tmp/lupi-px.png
+          test "$(magick identify -format '%w %h' /tmp/lupi-px.png)" = "2 2"
+
+      - name: Build cartridge
+        run: |
+          set -euo pipefail
+          make lupi
+          test -s sf.lupi
+          unzip -l sf.lupi | grep -q 'game.lua'
+          unzip -l sf.lupi | grep -q 'sfx/hit.ogg'
+
+      - name: Release .lupi
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: latest
+          name: SF
+          files: sf.lupi
+          make_latest: true

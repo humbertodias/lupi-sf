@@ -1,0 +1,4 @@
+name: sf
+public: true
+version: 0.1
+minify: false

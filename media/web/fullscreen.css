@@ -1,0 +1,38 @@
+html, body {
+  margin: 0;
+  width: 100%;
+  height: 100%;
+  overflow: hidden;
+  background: #000;
+}
+
+body {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+#output {
+  display: none !important;
+}
+
+canvas.emscripten {
+  border: 0;
+  background: #000;
+  display: block;
+  image-rendering: pixelated;
+  image-rendering: crisp-edges;
+  width: min(100vw, calc(100vh * 480 / 270)) !important;
+  height: min(100vh, calc(100vw * 270 / 480)) !important;
+  max-width: 100vw;
+  max-height: 100vh;
+}
+
+@supports (height: 100dvh) {
+  canvas.emscripten {
+    width: min(100dvw, calc(100dvh * 480 / 270)) !important;
+    height: min(100dvh, calc(100dvw * 270 / 480)) !important;
+    max-width: 100dvw;
+    max-height: 100dvh;
+  }
+}

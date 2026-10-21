@@ -1,0 +1,75 @@
+name: Pages
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+concurrency:
+  group: pages
+  cancel-in-progress: false
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout game
+        uses: actions/checkout@v7
+        with:
+          submodules: true
+
+      - name: Install tools
+        run: |
+          set -euo pipefail
+          sudo apt-get update
+          sudo apt-get install -y lua5.4 zip imagemagick
+          sudo ln -sf "$(command -v lua5.4)" /usr/local/bin/lua
+          if ! command -v magick >/dev/null; then
+            printf '%s\n' \
+              '#!/bin/sh' \
+              'if [ "${1-}" = "identify" ]; then' \
+              '  shift' \
+              '  exec identify "$@"' \
+              'fi' \
+              'exec convert "$@"' \
+              | sudo tee /usr/local/bin/magick >/dev/null
+            sudo chmod +x /usr/local/bin/magick
+          fi
+
+      - name: Build web game
+        run: make web
+
+      - name: Assemble site
+        run: |
+          set -euo pipefail
+          mkdir -p _site
+          cp -a .build/webgame/. _site/
+          test -s _site/index.html
+          test -s _site/fullscreen.css
+          test -s _site/game.js
+          test -s _site/game.wasm
+          test -s _site/game.data
+
+      - name: Setup Pages
+        uses: actions/configure-pages@v6
+
+      - name: Upload Pages artifact
+        uses: actions/upload-pages-artifact@v5
+        with:
+          path: _site
+
+  deploy:
+    needs: build
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - name: Deploy to GitHub Pages
+        id: deployment
+        uses: actions/deploy-pages@v5
