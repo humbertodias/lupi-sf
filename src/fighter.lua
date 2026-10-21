@@ -1,44 +1,51 @@
--- Lutador. Normais, hadouken, shoryuken, tatsumaki, agarrão e bloqueio.
+-- Lutador. Os golpes, frames, caixas e velocidades vem de src/defs.lua,
+-- gerado dos JSON em Assets/objects/SF3.
 
 local Screen = require "screen"
 local Stage = require "stage"
 local Motion = require "motion"
 local Input = require "input"
+local Sheet = require "sheet"
+local Defs = require "defs"
 
-local HADOU = {
-  lp = { dmg = 20, speed = 3.4, stun = 14, push = 8 },
-  mp = { dmg = 28, speed = 4.4, stun = 16, push = 10 },
-  hp = { dmg = 34, speed = 5.2, stun = 18, push = 12 },
-}
-
-local DP = {
-  lp = { dmg = 36, hop = -5.3, stun = 16 },
-  mp = { dmg = 44, hop = -6.2, stun = 18 },
-  hp = { dmg = 52, hop = -7.0, stun = 20 },
-}
-
-local MOVES = {
-  lp = { kind = "normal", limb = "punch", startup = 3, active = 3, recovery = 8, dmg = 12, stun = 12, push = 8, h = "high", reach = 48, y0 = 34, y1 = 52, cancel = true },
-  mp = { kind = "normal", limb = "punch", startup = 6, active = 3, recovery = 12, dmg = 20, stun = 16, push = 10, h = "high", reach = 52, y0 = 32, y1 = 54 },
-  hp = { kind = "normal", limb = "punch", startup = 10, active = 4, recovery = 18, dmg = 32, stun = 20, push = 14, h = "high", reach = 56, y0 = 30, y1 = 56 },
-  lk = { kind = "normal", limb = "kick", startup = 4, active = 3, recovery = 8, dmg = 12, stun = 12, push = 8, h = "mid", reach = 50, y0 = 14, y1 = 34, cancel = true },
-  mk = { kind = "normal", limb = "kick", startup = 7, active = 4, recovery = 13, dmg = 20, stun = 16, push = 10, h = "mid", reach = 56, y0 = 12, y1 = 36 },
-  hk = { kind = "normal", limb = "kick", startup = 11, active = 4, recovery = 18, dmg = 30, stun = 20, push = 12, h = "mid", reach = 62, y0 = 16, y1 = 42 },
-  clp = { kind = "normal", limb = "punch", crouch = true, startup = 3, active = 3, recovery = 7, dmg = 10, stun = 11, push = 6, h = "mid", reach = 46, y0 = 6, y1 = 24, cancel = true },
-  cmp = { kind = "normal", limb = "punch", crouch = true, startup = 6, active = 3, recovery = 12, dmg = 18, stun = 15, push = 8, h = "low", reach = 50, y0 = 2, y1 = 22 },
-  clk = { kind = "normal", limb = "kick", crouch = true, startup = 4, active = 3, recovery = 8, dmg = 10, stun = 11, push = 6, h = "low", reach = 48, y0 = 0, y1 = 16, cancel = true },
-  cmk = { kind = "normal", limb = "kick", crouch = true, startup = 7, active = 3, recovery = 12, dmg = 18, stun = 15, push = 8, h = "low", reach = 54, y0 = 0, y1 = 18 },
-  chk = { kind = "normal", limb = "kick", crouch = true, sweep = true, startup = 9, active = 4, recovery = 18, dmg = 26, stun = 8, push = 6, h = "low", reach = 64, y0 = 0, y1 = 14 },
-  airp = { kind = "normal", limb = "punch", startup = 4, active = 6, recovery = 6, dmg = 14, stun = 14, push = 4, h = "mid", reach = 48, y0 = 24, y1 = 46 },
-  airk = { kind = "normal", limb = "kick", startup = 5, active = 6, recovery = 6, dmg = 16, stun = 14, push = 4, h = "mid", reach = 54, y0 = 8, y1 = 30 },
-  throw = { kind = "throw", limb = "punch", startup = 4, active = 2, recovery = 16, dmg = 28, stun = 1, push = 4, h = "throw", reach = 40, y0 = 0, y1 = 40 },
-  hadou = { kind = "hadou", limb = "punch", startup = 8, active = 2, recovery = 16, dmg = 20, stun = 16, push = 10, h = "mid", speed = 3.4, ball = "normal", reach = 1, y0 = 0, y1 = 1 },
-  dp = { kind = "dp", limb = "punch", startup = 3, active = 8, recovery = 6, dmg = 42, stun = 18, push = 8, h = "mid", reach = 40, y0 = 16, y1 = 76, launch = true, hop = -6.2 },
-  tatsu = { kind = "tatsu", limb = "kick", startup = 4, active = 16, recovery = 10, dmg = 26, stun = 16, push = 10, h = "mid", reach = 34, y0 = 8, y1 = 40 },
-}
+local PUNCH = { lp = "Jab", mp = "Strong", hp = "Fierce" }
+local KICK = { lk = "Short", mk = "Forward", hk = "Roundhouse" }
 
 local Fighter = {}
 Fighter.__index = Fighter
+
+local function has_token(list, token)
+  if not list then return false end
+  for i = 1, #list do
+    if list[i] == token then return true end
+  end
+  return false
+end
+
+local function kind_of(name)
+  name = name or ""
+  if name:find("Hadouken", 1, true) then return "hadou" end
+  if name:find("Shoryuken", 1, true) then return "dp" end
+  if name:find("Tatsumaki", 1, true) then return "tatsu" end
+  if name == "Grab" or name:find("Trow", 1, true) then return "throw" end
+  if name:find("Dash", 1, true) then return "dash" end
+  if name:find("Jump", 1, true) then return "jump" end
+  return "normal"
+end
+
+local function slot_of(name)
+  name = name or "Stand"
+  if name == "Stand" or name == "Neutral Landing" or name == "Neutrallanding" then return "idle" end
+  if name == "Walk Forward" or name == "Walk Backward" then return "walk" end
+  if name == "Crouch" then return "crouch" end
+  if name:find("Jump", 1, true) then return "jump" end
+  if name:find("Dash", 1, true) then return "dash" end
+  if name:find("Block", 1, true) then return "block" end
+  if name:find("Hit", 1, true) or name:find("Tummble", 1, true) then return "hit" end
+  if name == "Victory" then return "win" end
+  if name:find("Landing", 1, true) or name == "Neutrallanding" then return "land" end
+  return kind_of(name) == "normal" and "attack" or kind_of(name)
+end
 
 function Fighter.new(spec)
   spec = spec or {}
@@ -49,7 +56,6 @@ function Fighter.new(spec)
     cpu = spec.cpu or false,
     match = spec.match,
     face = spec.face or 1,
-    hp_max = 200,
     wins = 0,
     meter = 0,
     t = 0,
@@ -59,33 +65,85 @@ function Fighter.new(spec)
   return self
 end
 
+function Fighter:defs()
+  return Defs[self.style]
+end
+
 function Fighter:reset(x, face)
+  local defs = self:defs()
   self.x = x
   self.y = Stage.GROUND
   self.vx = 0
   self.vy = 0
   self.face = face
+  self.hp_max = defs.hp
+  self.meter_max = defs.meter_max
   self.hp = self.hp_max
-  self.state = "idle"
   self.airborne = false
   self.dead = false
   self.move = nil
   self.phase = nil
-  self.phase_t = 0
   self.stun = 0
   self.invuln = 0
   self.flash = 0
   self.combo = 0
   self.did_hit = false
   self.air_used = false
+  self.juggle = 100
   self.buf = nil
   self.kbuf = nil
   self.request = nil
   self.request_t = 0
   self.ai_wait = 0
-  self.dash_t = 0
   self.pad = Input.neutral()
+  self.history = {}
+  self.hist_dir = "5"
+  self.hist_motion = {}
   self.motion:clear()
+  self.jump_lock = false
+  self.afx = 1
+  self.afy = 1
+  self.state_name = nil
+  self:begin_state("Stand")
+end
+
+local HISTORY_BUTTONS = {
+  { "lp", "p_b6" },
+  { "mp", "p_b5" },
+  { "hp", "p_b4" },
+  { "lk", "p_b3" },
+  { "mk", "p_b2" },
+  { "hk", "p_b1" },
+}
+
+function Fighter:note_history()
+  local pad = self.pad or Input.neutral()
+  local dir = tostring(pad.dir or 5)
+  local row = {}
+  if dir ~= self.hist_dir then
+    row[#row + 1] = dir
+    self.hist_dir = dir
+  end
+  for i = 1, #HISTORY_BUTTONS do
+    local key, icon = HISTORY_BUTTONS[i][1], HISTORY_BUTTONS[i][2]
+    if pad[key] then row[#row + 1] = icon end
+  end
+  self.hist_motion = self.hist_motion or {}
+  local motions = {
+    { "DP", self.motion:dp() },
+    { "QCF", self.motion:qcf() },
+    { "QCB", self.motion:qcb() },
+  }
+  for i = 1, #motions do
+    local name, on = motions[i][1], motions[i][2]
+    if on and not self.hist_motion[name] then row[#row + 1] = name end
+    self.hist_motion[name] = on and true or false
+  end
+  if #row == 0 then return end
+  local history = self.history or {}
+  history[#history + 1] = row
+  while #history > 8 do table.remove(history, 1) end
+  self.history = history
 end
 
 function Fighter:fx(name)
@@ -94,194 +152,222 @@ function Fighter:fx(name)
   end
 end
 
+function Fighter:cur_state()
+  local defs = self:defs()
+  if not defs or not self.state_name then return nil end
+  return defs.states[self.state_name]
+end
+
+function Fighter:cur()
+  local state = self:cur_state()
+  if not state then return nil end
+  return state.frames[self.anim_i or 1]
+end
+
 function Fighter:can_turn()
-  return not self.dead and not self.airborne and not self.move
+  return not self.dead and self.stun <= 0 and not self.airborne
     and (self.state == "idle" or self.state == "walk" or self.state == "crouch")
 end
 
 function Fighter:actionable()
-  if self.dead or self.stun > 0 or self.move then return false end
+  if self.dead or self.stun > 0 then return false end
   if self.airborne then return self.state == "jump" and not self.air_used end
-  return self.state == "idle" or self.state == "walk" or self.state == "crouch"
-    or self.state == "dash" or self.state == "land"
+  local name = self.state_name
+  if name == "Stand" or name == "Walk Forward" or name == "Walk Backward" or name == "Crouch" then
+    return true
+  end
+  return has_token(self:cur() and self:cur().cancel, "interrupt")
 end
 
 function Fighter:can_cancel()
-  return self.move and self.move.cancel and self.phase == "active" and not self.airborne
+  local frame = self:cur()
+  return frame and frame.hit and has_token(frame.hcancel, "normal") and not self.airborne
 end
 
-function Fighter:begin(name, extra)
-  local m = {}
-  local src = MOVES[name]
-  for k, v in pairs(src) do m[k] = v end
-  if extra then
-    for k, v in pairs(extra) do m[k] = v end
+function Fighter:begin_state(name, opts)
+  opts = opts or {}
+  local state = self:defs().states[name]
+  if not state then return false end
+  local cost = state.bar or 0
+  if cost > 0 then
+    if self.meter < cost then return false end
+    self.meter = self.meter - cost
   end
-  self.move = m
-  self.move_name = name
-  self.phase = "startup"
-  self.phase_t = 0
+  self.state_name = name
+  self.kind = kind_of(name)
+  self.state = slot_of(name)
+  self.anim_i = 1
+  self.anim_t = 0
+  self.seen_hit = false
+  self.swung = false
   self.did_hit = false
-  self.state = (m.kind == "normal") and "attack" or m.kind
-  if m.kind == "normal" or m.kind == "hadou" or m.kind == "throw" then self.vx = 0 end
-  if m.kind == "dp" then self.invuln = math.max(self.invuln, 8) end
-  if m.kind == "tatsu" and self.airborne then
-    self.vy = 0.3
-    self.air_used = true
-  end
-  self.motion:clear()
-  self.buf = nil
-  self.kbuf = nil
-end
-
-function Fighter:end_move()
-  self.move = nil
-  self.phase = nil
-  self.did_hit = false
-  if self.airborne then
-    self.state = "jump"
-  else
+  self.ax = 0
+  self.ay = 0
+  self.repeats = 0
+  -- No ar o golpe nao zera a velocidade: o arco do pulo continua, como no Reencor.
+  if not opts.keep and not self.airborne then
     self.vx = 0
-    self.state = self.pad.down and "crouch" or "idle"
+    self.vy = 0
   end
+  if self.kind ~= "normal" and self.kind ~= "jump" and self.kind ~= "dash" and name ~= "Stand"
+    and name ~= "Walk Forward" and name ~= "Walk Backward" and name ~= "Crouch" then
+    self.motion:clear()
+    self.buf = nil
+    self.kbuf = nil
+  end
+  self:apply_frame()
+  return true
 end
 
-function Fighter:on_active()
-  local m = self.move
-  if m.kind == "hadou" then
-    if self.match then self.match:add_ball(self) end
-    self:fx("hadou")
-  elseif m.kind == "dp" then
+function Fighter:apply_frame()
+  local frame = self:cur()
+  if not frame then
+    self.move = nil
+    self.phase = nil
+    return
+  end
+  if frame.image then self.sprite = frame.image end
+  if frame.go and frame.go ~= self.state_name and self:defs().states[frame.go] then
+    self:begin_state(frame.go, { keep = true })
+    return
+  end
+  if frame.ox then self.x = self.x + self.face * frame.ox end
+  if frame.oy then self.y = self.y - frame.oy end
+  if frame.avx then self.vx = self.vx + self.face * frame.avx end
+  if frame.avy then self.vy = self.vy - frame.avy end
+  if frame.ax ~= nil then self.ax = frame.ax end
+  if frame.ay ~= nil then self.ay = frame.ay end
+  if frame.afx then self.afx = frame.afx end
+  if frame.afy then self.afy = frame.afy end
+  if (frame.avy or 0) > 0 or (self:cur_state() and self:cur_state().air) then
     self.airborne = true
-    self.vy = m.hop or -6.2
-    self.vx = self.face * 2.3
+  end
+  if frame.spawn and self.match then
+    self.match:add_ball(self, frame.spawn)
+    self:fx("hadou")
+  end
+  if frame.hit and not self.swung then
+    self.swung = true
     self:fx("swing")
-  elseif m.kind == "tatsu" then
-    self.vx = self.face * (self.airborne and 2.6 or 3.5)
-    self:fx("swing")
+  end
+  if frame.hit then
+    self.seen_hit = true
+    self.phase = "active"
+    if frame.arm then self.did_hit = false end
+    self.move = {
+      dmg = frame.dmg or 0,
+      stun = frame.stun or 8,
+      push = frame.push or 0,
+      h = frame.h or "mid",
+      kind = self.kind,
+      launch = frame.launch,
+      sweep = frame.sweep,
+      gain = frame.gain or frame.dmg or 0,
+      stop = frame.stop,
+      kx = frame.kx,
+      ky = frame.ky,
+      tags = frame.tags,
+      bstun = frame.bstun,
+      bdmg = frame.bdmg,
+      juggle = frame.juggle,
+    }
+  elseif frame.take then
+    self.phase = "active"
+    self.move = { dmg = 0, stun = 1, push = 4, h = "throw", kind = "throw", gain = 0 }
   else
-    self:fx("swing")
+    self.move = nil
+    self.phase = self.seen_hit and "recovery" or "startup"
   end
 end
 
-function Fighter:advance_move()
-  local m = self.move
-  if not m or self.phase == "fall" then return end
-  local limit = m.recovery
-  if self.phase == "startup" then limit = m.startup
-  elseif self.phase == "active" then limit = m.active end
-  self.phase_t = self.phase_t + 1
-  if self.phase_t < limit then return end
-  self.phase_t = 0
-  if self.phase == "startup" then
-    self.phase = "active"
-    self:on_active()
-  elseif self.phase == "active" then
-    if m.kind == "dp" or (m.kind == "tatsu" and self.airborne) then
-      self.phase = "fall"
-    else
-      if m.kind == "tatsu" then self.vx = self.vx * 0.25 end
-      self.phase = "recovery"
+function Fighter:advance_anim()
+  local state = self:cur_state()
+  local frame = self:cur()
+  if not state or not frame then return end
+  self.anim_t = (self.anim_t or 0) + 1
+  if self.anim_t < frame.dur then return end
+  self.anim_t = 0
+  if frame.rep then
+    local back, times = frame.rep[1], frame.rep[2]
+    self.repeats = (self.repeats or 0) + 1
+    if times < 0 or self.repeats <= times then
+      self.anim_i = self.anim_i - back + 1
+      if self.anim_i < 1 then self.anim_i = 1 end
+      self:apply_frame()
+      return
     end
-  else
-    self:end_move()
   end
+  local last = #state.frames
+  if self.anim_i >= last then
+    if self.airborne or self.stun > 0 or state.hold or self.state == "win" or self.state == "ko" then
+      self.anim_i = last
+      return
+    end
+    if state.loop then
+      self.anim_i = 1
+      self:apply_frame()
+      return
+    end
+    if not self.dead then
+      self:begin_state(self.pad.down and "Crouch" or "Stand")
+    end
+    return
+  end
+  self.anim_i = self.anim_i + 1
+  self:apply_frame()
+end
+
+function Fighter:tick_decor()
+  if self.match then return end
+  if self.state_name ~= "Stand" then self:begin_state("Stand") end
+  self:advance_anim()
 end
 
 function Fighter:tick_stun()
   if self.stun <= 0 then return end
   self.stun = self.stun - 1
   if self.stun > 0 then return end
-  if self.state == "down" then
-    self.invuln = math.max(self.invuln, 16)
-    self.state = "idle"
-    self.vx = 0
-  elseif self.state == "hit" or self.state == "block" or self.state == "land" then
-    self.state = self.pad.down and "crouch" or "idle"
-    self.vx = 0
-  end
-end
-
-function Fighter:jump()
-  local pad = self.pad
-  self.state = "jump"
-  self.airborne = true
-  self.air_used = false
-  self.move = nil
-  self.vy = -6.35
-  if pad.fwd then self.vx = self.face * 2.15
-  elseif pad.back then self.vx = -self.face * 1.75
-  else self.vx = 0 end
-end
-
-function Fighter:dash(sign)
-  local speed = sign > 0 and 4.8 or 4.0
-  self.state = "dash"
-  self.vx = self.face * sign * speed
-  self.dash_t = 9
-  self.move = nil
-  self.motion:clear()
-  self:fx("dash")
-  if self.match then self.match:spark(self.x - self.face * 6, self.y - 2, Screen.GI) end
-end
-
-function Fighter:fire_hadou(strength)
-  if strength == "hp" and self.meter >= 80 then
-    self.meter = self.meter - 80
-    self:begin("hadou", { dmg = 70, speed = 5.6, ball = "shinku", stun = 22, push = 16, startup = 12 })
-  else
-    self:begin("hadou", HADOU[strength] or HADOU.lp)
+  if self.state == "ko" or self.dead or self.state == "launch" then return end
+  if self.state_name and self.state_name:find("Tummble", 1, true) then return end
+  self.vx = 0
+  if not self.airborne then
+    self:begin_state(self.pad.down and "Crouch" or "Stand")
   end
 end
 
 function Fighter:try_punch(strength)
-  local act = self:actionable()
-  local cancel = self:can_cancel()
-  if not act and not cancel then return false end
-  if not self.airborne and self.motion:dp() then
-    self:begin("dp", DP[strength] or DP.mp)
-    return true
-  end
-  if not self.airborne and self.motion:qcf() then
-    self:fire_hadou(strength)
-    return true
-  end
-  if not act then return false end
+  if not self:actionable() and not self:can_cancel() then return false end
+  local suffix = PUNCH[strength] or "Jab"
   if self.airborne then
+    if self.air_used then return false end
     self.air_used = true
-    self:begin("airp")
-    return true
+    return self:begin_state("Aerial " .. suffix)
   end
-  if self.pad.down then
-    self:begin(strength == "lp" and "clp" or "cmp")
-  else
-    self:begin(strength)
+  if self.motion:dp() then return self:begin_state("Shoryuken " .. suffix) end
+  if self.motion:qcf() then
+    if strength == "hp" then
+      local shinku = self:defs().states["Shinku Hadouken"]
+      if shinku and self.meter >= (shinku.bar or 80) then
+        return self:begin_state("Shinku Hadouken")
+      end
+    end
+    return self:begin_state("Hadouken " .. suffix)
   end
-  return true
+  if self.pad.down then return self:begin_state("Crouch " .. suffix) end
+  return self:begin_state("Stand " .. suffix)
 end
 
 function Fighter:try_kick(strength)
-  local act = self:actionable()
-  local cancel = self:can_cancel()
-  if not act and not cancel then return false end
-  if self.motion:qcb() then
-    self:begin("tatsu")
-    return true
-  end
-  if not act then return false end
+  if not self:actionable() and not self:can_cancel() then return false end
+  local suffix = KICK[strength] or "Short"
   if self.airborne then
+    if self.air_used then return false end
     self.air_used = true
-    self:begin("airk")
-    return true
+    return self:begin_state("Aerial " .. suffix)
   end
-  if self.pad.down then
-    if strength == "hk" then self:begin("chk")
-    elseif strength == "mk" then self:begin("cmk")
-    else self:begin("clk") end
-  else
-    self:begin(strength)
-  end
-  return true
+  if self.motion:qcb() then return self:begin_state("Tatsumaki " .. suffix) end
+  if self.pad.down then return self:begin_state("Crouch " .. suffix) end
+  return self:begin_state("Stand " .. suffix)
 end
 
 function Fighter:note_buttons()
@@ -299,7 +385,7 @@ function Fighter:try_commands()
   local fresh = self.buf and self.buf.t == 8 and self.kbuf and self.kbuf.t == 8
   local motion = self.motion:dp() or self.motion:qcf() or self.motion:qcb()
   if fresh and self:actionable() and not self.airborne and not motion then
-    self:begin("throw")
+    self:begin_state("Grab")
     return
   end
   if punch and self:try_punch(punch) then return end
@@ -322,24 +408,36 @@ function Fighter:take_request()
     self.request = nil
     return false
   end
-  local special = name == "hadou" or name == "dp" or name == "tatsu"
   local grounded = not self.airborne or name == "tatsu"
-  local allowed = (self:actionable() or (self:can_cancel() and special)) and grounded
-  if allowed and special then
-    if name == "hadou" then self:fire_hadou(arg ~= "" and arg or "lp")
-    elseif name == "dp" then self:begin("dp", DP[arg] or DP.hp)
-    else self:begin("tatsu") end
+  local allowed = (self:actionable() or self:can_cancel()) and grounded
+  if allowed and (name == "hadou" or name == "dp" or name == "tatsu") then
+    if name == "hadou" then
+      local suffix = PUNCH[arg] or "Jab"
+      if arg == "hp" then
+        local shinku = self:defs().states["Shinku Hadouken"]
+        if shinku and self.meter >= (shinku.bar or 80) and self:begin_state("Shinku Hadouken") then
+          self.request = nil
+          return true
+        end
+      end
+      self:begin_state("Hadouken " .. suffix)
+    elseif name == "dp" then
+      self:begin_state("Shoryuken " .. (PUNCH[arg] or "Fierce"))
+    else
+      self:begin_state("Tatsumaki " .. (KICK[arg] or "Short"))
+    end
     self.request = nil
     return true
   end
   if name == "dash" and self:actionable() and not self.airborne then
-    self:dash(1)
+    self:begin_state(arg == "back" and "Back Dash" or "Front Dash")
     self.request = nil
     return true
   end
   if name == "jump" and self:actionable() and not self.airborne then
-    if arg == "fwd" then self.pad.fwd = true elseif arg == "back" then self.pad.back = true end
-    self:jump()
+    local jump = "Neutral Jump"
+    if arg == "fwd" then jump = "Front Jump" elseif arg == "back" then jump = "Back Jump" end
+    self:begin_state(jump)
     self.request = nil
     return true
   end
@@ -347,95 +445,106 @@ function Fighter:take_request()
   return false
 end
 
+function Fighter:jump_held()
+  local pad = self.pad or {}
+  local dir = pad.dir or 5
+  return pad.up or dir == 7 or dir == 8 or dir == 9
+end
+
 function Fighter:locomotion()
-  if self.move or self.airborne or self.dead or self.stun > 0 then return end
-  if self.state == "ko" or self.state == "win" or self.state == "down" or self.state == "hit" or self.state == "block" then
-    return
-  end
-  if self.state == "dash" then
-    self.dash_t = (self.dash_t or 1) - 1
-    if self.dash_t <= 0 then
-      self.state = "idle"
-      self.vx = 0
+  if self.dead or self.stun > 0 or self.state == "win" or self.state == "ko" then return end
+  local name = self.state_name
+  local free = name == "Stand" or name == "Walk Forward" or name == "Walk Backward"
+    or name == "Crouch" or name == "Front Dash" or name == "Back Dash"
+  if not self:jump_held() then self.jump_lock = false end
+  if not free then return end
+  local pad = self.pad
+  if self:jump_held() then
+    if not self.jump_lock then
+      local dir = pad.dir or 5
+      local jump = "Neutral Jump"
+      if dir == 9 or (dir ~= 7 and pad.fwd) then jump = "Front Jump"
+      elseif dir == 7 or pad.back then jump = "Back Jump" end
+      self:begin_state(jump)
+      self.jump_lock = true
     end
     return
   end
-  if self.state ~= "idle" and self.state ~= "walk" and self.state ~= "crouch" and self.state ~= "land" then
-    return
-  end
-  local pad = self.pad
-  if pad.up then
-    self:jump()
-    return
-  end
   if self.motion:dash() and not pad.down then
-    self:dash(1)
+    self:begin_state("Front Dash")
     return
   end
   if self.motion:backstep() and not pad.down then
-    self:dash(-1)
+    self:begin_state("Back Dash")
     return
   end
-  if pad.down then
-    self.state = "crouch"
-    if pad.fwd then self.vx = self.face * 0.85
-    elseif pad.back then self.vx = -self.face * 0.85
-    else self.vx = 0 end
-    return
+  local want = "Stand"
+  if pad.down then want = "Crouch"
+  elseif pad.fwd then want = "Walk Forward"
+  elseif pad.back then want = "Walk Backward"
   end
-  if pad.fwd or pad.back then
-    self.state = "walk"
-    self.vx = pad.fwd and self.face * 1.75 or -self.face * 1.45
-    return
-  end
-  self.state = "idle"
-  self.vx = 0
+  if self.state_name ~= want then self:begin_state(want) end
 end
 
 function Fighter:land()
   self.airborne = false
   self.y = Stage.GROUND
   self.vy = 0
+  self.vx = 0
+  self.afx = 1
+  self.afy = 1
   self.air_used = false
+  self.juggle = 100
+  self:fx("land")
   if self.state == "win" then
     self.vx = 0
-    self.move = nil
     return
   end
-  if self.dead or self.state == "ko" then
+  if self.dead then
+    if self.state_name ~= "Defeated Tummble Landing" then
+      self:begin_state("Defeated Tummble Landing", { keep = true })
+    end
     self.state = "ko"
-    self.dead = true
-    self.vx = 0
+    self.stun = 0
     self.move = nil
-    self:fx("land")
     return
   end
-  if self.state == "launch" or self.state == "down" then
-    self.state = "down"
-    self.stun = 32
-    self.invuln = 10
-    self.vx = 0
-    self.move = nil
-    self.phase = nil
-    self:fx("land")
-    return
-  end
-  self.move = nil
-  self.phase = nil
-  self.state = "land"
-  self.stun = 4
   self.vx = 0
-  self:fx("land")
+  local land = self:defs().land or {}
+  local next_name = land[self.state_name]
+  if not next_name and self.state_name and self.state_name:find("Tummble", 1, true) then
+    next_name = "Tummble Landing"
+  end
+  next_name = next_name or land["*"] or "Stand"
+  if not self:defs().states[next_name] then next_name = "Stand" end
+  self:begin_state(next_name)
 end
 
 function Fighter:physics()
-  if self.state == "hit" or self.state == "block" then self.vx = self.vx * 0.72 end
+  local frame = self:cur()
+  self.vx = self.vx + self.face * (self.ax or 0)
+  self.vy = self.vy - (self.ay or 0)
+  if not self.airborne and self.vy < 0 then self.airborne = true end
+  if not self.airborne then
+    if self.stun > 0 then
+      self.vx = self.vx * 0.85
+    else
+      local fric = (frame and frame.fric) or 0.7
+      if frame and frame.cvx then self.vx = self.vx + self.face * frame.cvx end
+      self.vx = self.vx * fric
+    end
+    self.vy = 0
+  end
   self.x = self.x + self.vx
-  if not self.airborne then return end
-  local glide = self.move and self.move.kind == "tatsu" and self.phase ~= "recovery" and self.phase ~= "fall"
-  if not glide then self.vy = self.vy + Stage.GRAV end
-  self.y = self.y + self.vy
-  if self.y >= Stage.GROUND then self:land() end
+  if self.airborne then
+    self.y = self.y + self.vy
+    self.vy = self.vy + self:defs().gravity
+    self.vx = self.vx * (self.afx or 1)
+    self.vy = self.vy * (self.afy or 1)
+    if self.y >= Stage.GROUND and self.vy >= 0 then self:land() end
+  else
+    self.y = Stage.GROUND
+  end
 end
 
 function Fighter:update()
@@ -444,15 +553,10 @@ function Fighter:update()
   if self.flash > 0 then self.flash = self.flash - 1 end
   self.pad = self.pad or Input.neutral()
   self.motion:push(self.pad.dir or 5)
-  if self.dead and not self.airborne then
-    self.state = "ko"
-    self.vx = 0
-    self.vy = 0
-    return
-  end
-  self:advance_move()
-  self:tick_stun()
+  self:note_history()
+  self:advance_anim()
   if not self.dead then
+    self:tick_stun()
     if not self:take_request() then self:try_commands() end
     self:locomotion()
   end
@@ -461,7 +565,7 @@ end
 
 function Fighter:try_block(move)
   if move.h == "throw" or self.airborne or self.invuln > 0 then return false end
-  if self.state == "hit" or self.state == "launch" or self.state == "down" or self.state == "ko" then return false end
+  if self.state == "hit" or self.state == "launch" or self.state == "ko" then return false end
   if self.state == "attack" or self.state == "dash" or self.state == "dp" or self.state == "hadou"
     or self.state == "tatsu" or self.state == "throw" then
     return false
@@ -469,63 +573,142 @@ function Fighter:try_block(move)
   if not self.pad.back then return false end
   if move.h == "low" then return self.pad.down and true or false end
   if move.h == "high" then return not self.pad.down end
+  self:begin_state(self.pad.down and "Crouch Block" or "Stand Block")
   return true
+end
+
+function Fighter:react(move)
+  local states = self:defs().states
+  local function pick(name)
+    if states[name] then return name end
+    return "Middle Light Hit"
+  end
+  local tags = move.tags or {}
+  local function tagged(token)
+    return has_token(tags, token)
+  end
+  local flying = self.airborne or (move.ky or 0) > 0
+  local tumble = {
+    { "sidetummble", "Side Tummble Hit" },
+    { "uptummble", "Up Tummble Hit" },
+    { "triptummble", "Trip Tummble Hit" },
+    { "upheadtummble", "Up Head Tummble Hit" },
+    { "upabdomentummble", "Up Abdomen Tummble Hit" },
+    { "sideabdomentummble", "Side Abdomen Tummble Hit" },
+    { "uphead", "Up Head Hit" },
+    { "sideabdomen", "Side Abdomen Hit" },
+  }
+  if flying then
+    for i = 1, #tumble do
+      if tagged(tumble[i][1]) then return pick(tumble[i][2]) end
+    end
+  end
+  local heavy = tagged("heavy") or tagged("super")
+  local medium = tagged("medium") or tagged("special")
+  local crouch = self.state == "crouch" or (self.pad and self.pad.down)
+  if crouch then
+    if heavy or tagged("special") or tagged("super") then return pick("Crouch Heavy Hit") end
+    if medium then return pick("Crouch Medium Hit") end
+    return pick("Crouch Light Hit")
+  end
+  if tagged("low") then
+    if medium and not heavy then return pick("Low Medium Hit") end
+    return pick("Low Light Hit")
+  end
+  if heavy then return pick("Middle Heavy Hit") end
+  if medium then return pick("Middle Medium Hit") end
+  return pick("Middle Light Hit")
 end
 
 function Fighter:suffer(move, dir)
   self.hp = self.hp - (move.dmg or 0)
   if self.hp < 0 then self.hp = 0 end
-  self.move = nil
-  self.phase = nil
-  self.did_hit = false
   self.flash = 4
-  if move.launch or move.sweep then
+  self.did_hit = false
+  local reaction = self:react(move)
+  self:begin_state(reaction, { keep = true })
+  self.stun = move.stun or 12
+  local face = move.face or dir
+  self.vx = face * (move.kx or 1.5)
+  if (move.ky or 0) > 0 then
+    self.airborne = true
+    self.vy = -move.ky
+    self.state = "launch"
+  elseif reaction:find("Tummble", 1, true) or move.h == "throw" then
     self.state = "launch"
     self.airborne = true
-    self.vy = move.sweep and -2.6 or -5.1
-    self.vx = dir * 2.4
-    self.stun = move.stun or 16
   else
     self.state = "hit"
-    self.stun = move.stun or 12
-    self.vx = dir * 1.5
   end
 end
 
 function Fighter:ko(dir)
   self.hp = 0
   self.dead = true
-  self.state = "ko"
-  self.airborne = true
-  self.vy = -4.2
-  self.vx = dir * 2.4
-  self.move = nil
-  self.phase = nil
   self.stun = 0
+  self.move = nil
+  self:begin_state("Side Tummble Hit", { keep = true })
+  self.airborne = true
+  self.vy = -4.7
+  self.vx = dir * 2.4
+end
+
+function Fighter:place_box(box)
+  local x, y, w, h = box[1], box[2], box[3], box[4]
+  local left = self.x + self.face * x
+  if self.face < 0 then left = left - w end
+  local bottom = self.y - y
+  return left, bottom - h, left + w, bottom
+end
+
+function Fighter:boxes_of(key)
+  local frame = self:cur()
+  local list = frame and frame[key]
+  local out = {}
+  if not list then return out end
+  for i = 1, #list do
+    local x1, y1, x2, y2 = self:place_box(list[i])
+    out[#out + 1] = { x1, y1, x2, y2 }
+  end
+  return out
+end
+
+function Fighter:hit_boxes()
+  local frame = self:cur()
+  if frame and frame.take then return self:boxes_of("take") end
+  return self:boxes_of("hit")
+end
+
+function Fighter:hurt_boxes()
+  return self:boxes_of("hurt")
 end
 
 function Fighter:hit_aabb()
-  local m = self.move
-  local near = self.x + self.face * 8
-  local far = self.x + self.face * m.reach
-  local x1, x2 = near, far
-  if x1 > x2 then x1, x2 = x2, x1 end
-  local y1 = self.y - m.y1
-  local y2 = self.y - m.y0
-  if y1 > y2 then y1, y2 = y2, y1 end
+  local boxes = self:hit_boxes()
+  if #boxes == 0 then return self.x, self.y, self.x, self.y end
+  local x1, y1, x2, y2 = boxes[1][1], boxes[1][2], boxes[1][3], boxes[1][4]
+  for i = 2, #boxes do
+    local b = boxes[i]
+    if b[1] < x1 then x1 = b[1] end
+    if b[2] < y1 then y1 = b[2] end
+    if b[3] > x2 then x2 = b[3] end
+    if b[4] > y2 then y2 = b[4] end
+  end
   return x1, y1, x2, y2
 end
 
 function Fighter:hurt_aabb()
-  if self.state == "ko" or self.state == "down" then
-    return self.x - 26, self.y - 12, self.x + 26, self.y
+  local boxes = self:hurt_boxes()
+  if #boxes == 0 then return self.x - 16, self.y - 40, self.x + 16, self.y end
+  local x1, y1, x2, y2 = boxes[1][1], boxes[1][2], boxes[1][3], boxes[1][4]
+  for i = 2, #boxes do
+    local b = boxes[i]
+    if b[1] < x1 then x1 = b[1] end
+    if b[2] < y1 then y1 = b[2] end
+    if b[3] > x2 then x2 = b[3] end
+    if b[4] > y2 then y2 = b[4] end
   end
-  local h = 54
-  local crouched = self.state == "crouch" or (self.move and self.move.crouch)
-    or (self.pad and self.pad.down and not self.airborne and not self.move)
-  if crouched then h = 30 end
-  if self.airborne then h = 46 end
-  return self.x - 16, self.y - h, self.x + 16, self.y
+  return x1, y1, x2, y2
 end
 
 function Fighter:pose()
@@ -533,23 +716,33 @@ function Fighter:pose()
   if self.state == "win" then return "win" end
   if self.state == "hit" or self.state == "launch" then return "hit" end
   if self.state == "block" then return self.pad.down and "crouch" or "block" end
-  if self.move and (self.phase == "active" or self.phase == "startup" or self.phase == "fall") then
-    local k = self.move.kind
-    if k == "dp" then return "dp" end
-    if k == "tatsu" then return "tatsu" end
-    if k == "hadou" then return "hadou" end
-    if k == "throw" then return "throw" end
-    if self.phase == "active" then
-      if self.move.limb == "kick" and self.move.crouch then return "sweep" end
-      if self.move.limb == "kick" then return "kick" end
-      if self.move.crouch then return "crouch_punch" end
-      return "punch"
-    end
-  end
-  if self.airborne then return self.vy < 0 and "rise" or "fall" end
+  if self.kind == "dp" then return "dp" end
+  if self.kind == "tatsu" then return "tatsu" end
+  if self.kind == "hadou" then return "hadou" end
+  if self.kind == "throw" then return "throw" end
   if self.state == "crouch" then return "crouch" end
   if self.state == "walk" or self.state == "dash" then return "walk" end
   return "idle"
+end
+
+function Fighter:draw_sheet()
+  local who = self:defs()
+  local frame = self:cur()
+  local id = (frame and frame.image) or self.sprite
+  if not who or not id then return false end
+  local cell = who.cell
+  local spr = Sheet.get(who.folder, id)
+  if spr then
+    self.shown = id
+  else
+    spr = self.shown and Sheet.get(who.folder, self.shown)
+  end
+  if not spr then return false end
+  local flipped = self.face > 0
+  local x = self.x - (cell.w - cell.ax)
+  if flipped then x = self.x - cell.ax end
+  ui.spr(spr, math.floor(x), math.floor(self.y - cell.ay), flipped)
+  return true
 end
 
 function Fighter:box(ox, bottom, w, h, color)
@@ -561,13 +754,12 @@ function Fighter:box(ox, bottom, w, h, color)
   Screen.rect(left, self.y - bottom - h, w, h, color)
 end
 
-function Fighter:draw()
+function Fighter:draw_body()
   local pose = self:pose()
   local gi = self.style == "ken" and Screen.KEN or Screen.GI
   local hair = self.style == "ken" and Screen.BLONDE or Screen.HAIR
   local bob = (math.floor(self.t / 18) % 2) == 0 and 0 or 1
   local step = (math.floor(self.t / 5) % 2) == 0 and 4 or -2
-  Screen.rect(self.x - 14, self.y - 3, 28, 3, Screen.SHADOW)
   if pose == "down" then
     self:box(-22, 0, 34, 10, gi)
     self:box(10, 2, 12, 11, Screen.SKIN)
@@ -618,6 +810,11 @@ function Fighter:draw()
     self:box(6, body_y + 2, 6, 12, gi)
     self:box(-12, body_y + 2, 6, 12, gi)
   end
+end
+
+function Fighter:draw()
+  Screen.rect(self.x - 14, self.y - 3, 28, 3, Screen.SHADOW)
+  if not self:draw_sheet() then self:draw_body() end
 end
 
 return Fighter

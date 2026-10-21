@@ -43,4 +43,7 @@ luac.out
 dist/
 sf.lupi
 .DS_Store
+.cache/
+Assets/images/
+media/img/
 

@@ -4,6 +4,8 @@ local Screen = require "screen"
 local Stage = require "stage"
 local Fighter = require "fighter"
 local Cpu = require "cpu"
+local Sheet = require "sheet"
+local Defs = require "defs"
 
 local GAP = 30
 local ROUND_TIME = 60 * 60
@@ -29,10 +31,10 @@ function Match.new(app)
     victor = nil,
   }, Match)
   self.p1 = Fighter.new({
-    match = self, id = "RYU", style = "ryu", x = 300, side = 1, face = 1, cpu = false,
+    match = self, id = "RYU", style = "ryu", x = Stage.P1_X, side = 1, face = 1, cpu = false,
   })
   self.p2 = Fighter.new({
-    match = self, id = "KEN", style = "ken", x = 660, side = 2, face = -1, cpu = true,
+    match = self, id = "KEN", style = "ken", x = Stage.P2_X, side = 2, face = -1, cpu = true,
   })
   return self
 end
@@ -52,35 +54,54 @@ function Match:read(f)
   return self.app.input:fighter(f.face)
 end
 
-function Match:spark(x, y, color)
-  self.sparks[#self.sparks + 1] = { x = x, y = y, t = 8, color = color or Screen.ORANGE }
+function Match:spark(x, y, color, kind, flip)
+  self.sparks[#self.sparks + 1] = {
+    x = x,
+    y = y,
+    color = color or Screen.ORANGE,
+    kind = kind or "spark",
+    i = 1,
+    t = 0,
+    fresh = true,
+    flip = flip and true or false,
+  }
 end
 
-function Match:live_ball(owner)
-  for i = 1, #self.balls do
-    local b = self.balls[i]
-    if b.alive and b.owner == owner then return true end
-  end
-  return false
-end
-
-function Match:add_ball(owner)
-  if self:live_ball(owner) then return end
-  local m = owner.move
-  local shinku = m.ball == "shinku"
+function Match:add_ball(owner, spawn)
+  spawn = spawn or { state = "Jab", x = 53, y = 55 }
+  local spec = Defs.ball.states[spawn.state] or Defs.ball.states.Jab
+  local frame = spec.frames[1]
+  local shinku = spawn.state == "Shinku" or spawn.state == "Denjin"
+  local x = owner.x + owner.face * spawn.x
+  local y = owner.y - spawn.y
   self.balls[#self.balls + 1] = {
     owner = owner,
     alive = true,
-    x = owner.x + owner.face * 30,
-    y = owner.y - 32,
-    vx = owner.face * (m.speed or 3),
+    x = x,
+    y = y,
+    vx = owner.face * (frame.vx or 0),
+    face = owner.face,
     r = shinku and 12 or 7,
-    dmg = m.dmg,
-    stun = m.stun or 16,
-    push = m.push or 10,
-    ball = m.ball or "normal",
+    hit = frame.hit,
+    dmg = frame.dmg or 0,
+    stun = frame.stun or 12,
+    push = frame.push or 0,
+    h = frame.h or "mid",
+    stop = frame.stop,
+    gain = frame.gain or frame.dmg or 0,
+    kx = frame.kx,
+    ky = frame.ky,
+    tags = frame.tags,
+    bstun = frame.bstun,
+    bdmg = frame.bdmg,
+    launch = frame.launch,
+    sweep = frame.sweep,
+    ball = shinku and "shinku" or "normal",
+    anim = spec.frames,
+    anim_i = 1,
+    anim_t = 0,
   }
-  self:spark(owner.x + owner.face * 24, owner.y - 32, shinku and Screen.RED or Screen.ORANGE)
+  self:spark(x, y, shinku and Screen.RED or Screen.ORANGE)
 end
 
 function Match:turn()
@@ -128,46 +149,85 @@ function Match:push(atk, def, amount)
   atk.x = atk.x - dir * amount * 0.45
 end
 
+local function overlap(a, b)
+  return a[1] < b[3] and a[3] > b[1] and a[2] < b[4] and a[4] > b[2]
+end
+
 function Match:boxes_hit(atk, def)
-  local x1, y1, x2, y2 = atk:hit_aabb()
-  local u1, v1, u2, v2 = def:hurt_aabb()
-  return x1 < u2 and x2 > u1 and y1 < v2 and y2 > v1
+  local hits = atk:hit_boxes()
+  local hurts = def:hurt_boxes()
+  for i = 1, #hits do
+    for j = 1, #hurts do
+      if overlap(hits[i], hurts[j]) then return true end
+    end
+  end
+  return false
+end
+
+function Match:ball_boxes(b)
+  local out = {}
+  local hits = b.hit or {}
+  for i = 1, #hits do
+    local box = hits[i]
+    local x, y, w, h = box[1], box[2], box[3], box[4]
+    local left = b.x + b.face * x
+    if b.face < 0 then left = left - w end
+    local bottom = b.y - y
+    out[#out + 1] = { left, bottom - h, left + w, bottom }
+  end
+  return out
 end
 
 function Match:ball_hits(b, def)
-  local u1, v1, u2, v2 = def:hurt_aabb()
-  local r = b.r
-  return (b.x - r) < u2 and (b.x + r) > u1 and (b.y - r) < v2 and (b.y + r) > v1
+  local hits = self:ball_boxes(b)
+  local hurts = def:hurt_boxes()
+  for i = 1, #hits do
+    for j = 1, #hurts do
+      if overlap(hits[i], hurts[j]) then return true end
+    end
+  end
+  return false
 end
 
 function Match:connect(atk, def, move, projectile)
   if def.dead or def.invuln > 0 then return end
   if not projectile then
     if atk.did_hit then return end
+    local gate = move.juggle or 1
+    if (def.juggle or 100) <= gate then
+      atk.did_hit = true
+      return
+    end
     atk.did_hit = true
+  end
+  move.face = move.face or atk.face
+  local was_air = def.airborne
+  if was_air then
+    def.juggle = math.max(0, (def.juggle or 100) - (move.juggle or 1))
   end
   local dir = (def.x >= atk.x) and 1 or -1
   if def:try_block(move) then
-    if def.hp > 1 then def.hp = def.hp - 1 end
+    local chip = move.bdmg or 0
+    if chip > 0 and def.hp > 1 then def.hp = math.max(1, def.hp - chip) end
     def.state = "block"
-    def.stun = math.max(6, math.floor((move.stun or 10) * 0.5))
+    def.stun = move.bstun or move.stun or 8
     def.move = nil
     def.phase = nil
-    def.vx = dir * 1.1
+    def.vx = (move.face or dir) * (move.kx or 1.1)
     def.flash = 2
     self.hitstop = 5
     self:fx("block")
-    self:spark(def.x - dir * 8, def.y - 28, Screen.WHITE)
+    self:spark(def.x - dir * 10, def.y - 58, Screen.WHITE)
     self:push(atk, def, math.floor((move.push or 8) * 0.6))
     return
   end
   def:suffer(move, dir)
-  atk.meter = math.min(80, atk.meter + (move.dmg or 0))
+  atk.meter = math.min(atk.meter_max or 80, atk.meter + (move.gain or move.dmg or 0))
   atk.combo = (atk.combo or 0) + 1
-  self.hitstop = (move.dmg or 0) >= 60 and 12 or 8
+  self.hitstop = move.stop or ((move.dmg or 0) >= 30 and 12 or 8)
   self.shake = 8
   self:fx("hit")
-  self:spark(def.x - dir * 8, def.y - 32, Screen.ORANGE)
+  self:spark(def.x - dir * 10, def.y - 58, Screen.ORANGE)
   self:push(atk, def, move.push or 8)
   if def.hp <= 0 then
     def:ko(dir)
@@ -221,17 +281,25 @@ function Match:collisions()
           atk = b.owner,
           def = def,
           ball = b,
-          move = { dmg = b.dmg, stun = b.stun, push = b.push, h = "mid", kind = "hadou" },
+          move = {
+            dmg = b.dmg, stun = b.stun, push = b.push, h = b.h or "mid",
+            kind = "hadou", gain = b.gain, stop = b.stop,
+            kx = b.kx, ky = b.ky, tags = b.tags, bstun = b.bstun, bdmg = b.bdmg,
+            launch = b.launch, sweep = b.sweep, face = b.face,
+          },
         }
       end
     end
   end
   for i = 1, #pending do
     local e = pending[i]
-    if e.def.invuln > 0 then
+    if e.def.invuln > 0 or e.def.dead then
       if e.ball then e.ball.alive = false end
-    elseif not e.def.dead then
-      if e.ball then e.ball.alive = false end
+    else
+      if e.ball then
+        self:spark(e.ball.x, e.ball.y, Screen.ORANGE, "burst", e.ball.vx > 0)
+        e.ball.alive = false
+      end
       self:connect(e.atk, e.def, e.move, e.ball ~= nil)
     end
   end
@@ -242,6 +310,35 @@ function Match:move_balls()
     local b = self.balls[i]
     if b.alive then
       b.x = b.x + b.vx
+      if b.anim then
+        local fr = b.anim[b.anim_i]
+        b.anim_t = (b.anim_t or 0) + 1
+        if fr and b.anim_t >= (fr.dur or 1) then
+          b.anim_t = 0
+          local nxt = b.anim_i + 1
+          if fr.rep then
+            local back, times = fr.rep[1], fr.rep[2]
+            b.repeats = (b.repeats or 0) + 1
+            if times < 0 or b.repeats <= times then
+              nxt = b.anim_i - back + 1
+              if nxt < 1 then nxt = 1 end
+            end
+          end
+          if nxt <= #b.anim and nxt ~= b.anim_i then
+            b.anim_i = nxt
+            fr = b.anim[b.anim_i]
+            if fr.vx then b.vx = b.face * fr.vx end
+            if fr.hit then b.hit = fr.hit end
+            if fr.dmg then b.dmg = fr.dmg end
+            if fr.kx then b.kx = fr.kx end
+            if fr.ky then b.ky = fr.ky end
+            if fr.tags then b.tags = fr.tags end
+            if fr.stun then b.stun = fr.stun end
+            if fr.bstun then b.bstun = fr.bstun end
+            if fr.bdmg then b.bdmg = fr.bdmg end
+          end
+        end
+      end
       if b.x < -40 or b.x > Stage.W + 40 then b.alive = false end
     end
   end
@@ -254,8 +351,19 @@ function Match:cleanup()
   end
   for i = 1, #self.sparks do
     local s = self.sparks[i]
-    s.t = s.t - 1
-    if s.t > 0 then sparks[#sparks + 1] = s end
+    if s.fresh then
+      s.fresh = false
+      sparks[#sparks + 1] = s
+    else
+      local frames = Sheet.Anims[s.kind or "spark"] or Sheet.Anims.spark
+      local dur = (frames and frames[s.i] and frames[s.i][2]) or 1
+      s.t = (s.t or 0) + 1
+      if s.t >= dur then
+        s.t = 0
+        s.i = (s.i or 1) + 1
+      end
+      if not frames or s.i <= #frames then sparks[#sparks + 1] = s end
+    end
   end
   self.balls = balls
   self.sparks = sparks
@@ -287,6 +395,7 @@ function Match:finish_round()
       winner.move = nil
       winner.phase = nil
       winner.vx = 0
+      if winner.begin_state then winner:begin_state("Victory", { keep = true }) end
     end
   end
   if not self.p1.dead and not self.p2.dead then self:fx("ko") end
@@ -307,14 +416,24 @@ function Match:after_outro()
   self.sparks = {}
   self.hitstop = 0
   self.shake = 0
-  self.p1:reset(300, 1)
-  self.p2:reset(660, -1)
+  self.p1:reset(Stage.P1_X, 1)
+  self.p2:reset(Stage.P2_X, -1)
 end
 
 function Match:drift(f)
   f.t = f.t + 1
   if f.flash > 0 then f.flash = f.flash - 1 end
-  if f.airborne then f:physics() end
+  f:advance_anim()
+  f:physics()
+end
+
+function Match:tick_effects()
+  if self.hitstop > 0 then
+    self.hitstop = self.hitstop - 1
+    return
+  end
+  self:move_balls()
+  self:cleanup()
 end
 
 function Match:fight()
@@ -356,11 +475,15 @@ function Match:update()
     self:drift(self.p1)
     self:drift(self.p2)
     self:bounds()
+    self:tick_effects()
     self.outro_t = self.outro_t - 1
     if self.outro_t <= 0 then self:after_outro() end
     return
   end
-  if self.mode == "done" then return end
+  if self.mode == "done" then
+    self:tick_effects()
+    return
+  end
   self:fight()
 end
 
@@ -386,7 +509,8 @@ function Match:draw_bars()
       Screen.rect(bx, 16, w, 8, col)
     end
     Screen.rect(x, 26, 160, 3, Screen.BELT)
-    local mw = math.floor(160 * f.meter / 80)
+    local cap = f.meter_max or 80
+    local mw = math.floor(160 * f.meter / cap)
     if mw > 0 then
       local mx = from_right and (x + 160 - mw) or x
       Screen.rect(mx, 26, mw, 3, f.meter >= 80 and Screen.YELLOW or Screen.METER)
@@ -433,12 +557,9 @@ end
 
 function Match:draw()
   Stage.backdrop()
-  ui.camera(math.floor(self:camera()), 0)
-  Stage.draw_world()
-  for i = 1, #self.sparks do
-    local s = self.sparks[i]
-    Screen.rect(s.x - s.t, s.y - 2, s.t * 2, 4, s.color)
-  end
+  local cam = math.floor(self:camera())
+  ui.camera(cam, 0)
+  Stage.draw_world(cam)
   local first, second = self.p1, self.p2
   if first.x > second.x then first, second = second, first end
   first:draw()
@@ -446,14 +567,56 @@ function Match:draw()
   for i = 1, #self.balls do
     local b = self.balls[i]
     if b.alive then
-      local col = b.ball == "shinku" and Screen.RED or Screen.ORANGE
-      ui.circfill(math.floor(b.x), math.floor(b.y), b.r, col)
-      ui.circfill(math.floor(b.x), math.floor(b.y), math.max(2, b.r - 4), Screen.YELLOW)
+      local fr = b.anim and b.anim[b.anim_i or 1]
+      local spr = fr and fr.image and Sheet.get("fireballs", fr.image)
+      if not spr then
+        local frames = b.ball == "shinku" and Sheet.Anims.shinku or Sheet.Anims.fire
+        spr = Sheet.get("fireballs", Sheet.frame_id(frames, self.frame))
+      end
+      if spr then
+        ui.spr(spr, math.floor(b.x - spr.width / 2), math.floor(b.y - spr.height / 2), b.vx > 0)
+      else
+        local col = b.ball == "shinku" and Screen.RED or Screen.ORANGE
+        ui.circfill(math.floor(b.x), math.floor(b.y), b.r, col)
+        ui.circfill(math.floor(b.x), math.floor(b.y), math.max(2, b.r - 4), Screen.YELLOW)
+      end
+    end
+  end
+  for i = 1, #self.sparks do
+    local s = self.sparks[i]
+    local frames = Sheet.Anims[s.kind or "spark"] or Sheet.Anims.spark
+    local fr = frames and frames[s.i or 1]
+    local folder = s.kind == "burst" and "fireballs" or "hitsparks"
+    local spr = fr and Sheet.get(folder, fr[1])
+    if spr then
+      ui.spr(spr, math.floor(s.x - spr.width / 2), math.floor(s.y - spr.height / 2), s.flip)
+    else
+      Screen.rect(s.x - 8, s.y - 3, 16, 6, s.color)
     end
   end
   ui.camera()
   self:draw_bars()
+  self:draw_history(self.p1, false)
+  self:draw_history(self.p2, true)
   self:draw_banner()
+end
+
+function Match:draw_history(f, from_right)
+  local rows = f.history
+  if not rows then return end
+  local step = 17
+  local y0 = 48
+  for i = 1, #rows do
+    local row = rows[i]
+    local y = y0 + (i - 1) * step
+    for j = 1, #row do
+      local spr = Sheet.get("inputs", row[j])
+      local x = from_right and (Screen.W - 4 - j * step) or (4 + (j - 1) * step)
+      if spr then
+        ui.spr(spr, x, y, false)
+      end
+    end
+  end
 end
 
 return Match

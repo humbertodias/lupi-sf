@@ -2,7 +2,7 @@
 
 Luta 2D para o console Lupi. Ryu contra o Ken controlado pelo CPU. Socos, chutes, hadouken, shoryuken, tatsumaki, bloqueio e melhor de três rounds.
 
-O jogo de origem é o [Reencor](https://github.com/Ranguel/Reencor), em pygame. Esta versão segue o molde do [lupi-asteroids](https://github.com/humbertodias/lupi-asteroids). O desenho dos lutadores é original: as folhas de sprite do pygame não entram no cartucho.
+O jogo de origem é o [Reencor](https://github.com/Ranguel/Reencor), em pygame. Esta versão segue o molde do [lupi-asteroids](https://github.com/humbertodias/lupi-asteroids). Os sprites vêm dos mesmos pacotes do pygame, baixados com `make assets`. Sem eles, o cartucho desenha os lutadores com retângulos.
 
 Versões: [web](https://humbertodias.github.io/lupi-sf/) | [desktop](https://github.com/humbertodias/lupi-sf/releases/latest/download/sf.lupi)
 
