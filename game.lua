@@ -21,8 +21,8 @@ function App.new()
     input = Input.new(),
     audio = Audio.new(),
   }, App)
-  self.ryu = Fighter.new({ id = "RYU", style = "ryu", x = 430, face = 1 })
-  self.ken = Fighter.new({ id = "KEN", style = "ken", x = 560, face = -1 })
+  self.ryu = Fighter.new({ id = "RYU", style = "ryu", x = Stage.P1_X, face = 1 })
+  self.ken = Fighter.new({ id = "KEN", style = "ken", x = Stage.P2_X, face = -1 })
   self.audio:music("menu", 8)
   self.machine = Machine.new({
     splash = Splash.new(self),
@@ -36,14 +36,17 @@ function App.new()
 end
 
 function App:update_decor()
+  self.ryu:tick_decor()
+  self.ken:tick_decor()
   self.ryu.t = self.ryu.t + 1
   self.ken.t = self.ken.t + 1
 end
 
 function App:draw_decor()
   Stage.backdrop()
-  ui.camera(250, 0)
-  Stage.draw_world()
+  local cam = math.floor(Stage.W / 2 - Screen.W / 2)
+  ui.camera(cam, 0)
+  Stage.draw_world(cam)
   self.ryu:draw()
   self.ken:draw()
   ui.camera()
