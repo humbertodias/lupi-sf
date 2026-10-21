@@ -330,6 +330,7 @@ function Fighter:tick_stun()
   if self.state == "ko" or self.dead or self.state == "launch" then return end
   if self.state_name and self.state_name:find("Tummble", 1, true) then return end
   self.vx = 0
+  if self.state == "block" then return end
   if not self.airborne then
     self:begin_state(self.pad.down and "Crouch" or "Stand")
   end
@@ -573,8 +574,8 @@ function Fighter:try_block(move)
     return false
   end
   if not self.pad.back then return false end
-  if move.h == "low" then return self.pad.down and true or false end
-  if move.h == "high" then return not self.pad.down end
+  if move.h == "low" and not self.pad.down then return false end
+  if move.h == "high" and self.pad.down then return false end
   self:begin_state(self.pad.down and "Crouch Block" or "Stand Block")
   return true
 end
