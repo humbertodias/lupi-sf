@@ -768,6 +768,93 @@ function Fighter:pose()
   return "idle"
 end
 
+function Fighter:kfm_clip()
+  local pose = self:pose()
+  local name = self.state_name or ""
+  if pose == "walk" then
+    return name:find("Backward", 1, true) and "walk_b" or "walk_f"
+  end
+  if pose == "punch" or pose == "crouch_punch" then
+    if name:find("Fierce", 1, true) then
+      return pose == "crouch_punch" and "c_fierce" or "fierce"
+    end
+    if name:find("Strong", 1, true) then
+      return pose == "crouch_punch" and "c_strong" or "strong"
+    end
+    return pose == "crouch_punch" and "c_jab" or "jab"
+  end
+  if pose == "kick" then
+    if name:find("Roundhouse", 1, true) then return "roundhouse" end
+    if name:find("Forward", 1, true) then return "forward" end
+    return "short"
+  end
+  if pose == "crouch_kick" then
+    return name:find("Forward", 1, true) and "c_forward" or "c_short"
+  end
+  local map = {
+    idle = "stand", dash = "dash", dash_b = "dash_b", crouch = "crouch",
+    jump = "jump", jump_f = "jump_f", jump_b = "jump_b", land = "land",
+    sweep = "sweep", hadou = "hadou", dp = "dp", tatsu = "tatsu",
+    throw = "throw", block = "block", crouch_block = "c_block",
+    hit = "hit", low_hit = "low_hit", crouch_hit = "crouch_hit",
+    air_punch = "air_punch", air_kick = "air_kick", air_hit = "air_hit",
+    fall = "fall", rise = "rise", down = "down", win = "win",
+  }
+  return map[pose] or "stand"
+end
+
+function Fighter:draw_kfm()
+  local ok, Kfm = pcall(require, "kfm")
+  if not ok or type(Kfm) ~= "table" or not Kfm.clips then return false end
+  local frames = Kfm.clips[self:kfm_clip()] or Kfm.clips.stand
+  if not frames or #frames == 0 then return false end
+  local n = #frames
+  local pose = self:pose()
+  local idx
+  if pose == "tatsu" then
+    -- Dois quadros de entrada e depois o giro, no ritmo do golpe original.
+    local startup = math.min(2, n)
+    local spin = n - startup
+    if (self.anim_i or 1) <= 3 or spin < 1 then
+      self.tatsu_t = self.t
+      idx = math.min(startup, self.anim_i or 1)
+    else
+      local step = math.floor((self.t - (self.tatsu_t or self.t)) / 2)
+      if step < 0 then step = 0 end
+      idx = startup + (step % spin) + 1
+    end
+  elseif pose == "idle" then
+    local span = math.max(n - 1, 1)
+    local p = math.floor(self.t / 6) % (span * 2)
+    idx = (p < span and p or (span * 2 - p)) + 1
+  elseif pose == "dash" or pose == "dash_b" then
+    if self.dash_name ~= self.state_name then
+      self.dash_name = self.state_name
+      self.dash_t = self.t
+    end
+    local step = math.floor((self.t - (self.dash_t or self.t)) / 4)
+    if step < 0 then step = 0 end
+    idx = (step % n) + 1
+  elseif pose == "walk" or pose == "crouch" or pose == "block" or pose == "crouch_block" then
+    idx = math.floor(self.t / 6) % n + 1
+  else
+    local st = self:cur_state()
+    local total = st and #st.frames or n
+    idx = math.min(n, math.floor(((self.anim_i or 1) - 1) * n / math.max(total, 1)) + 1)
+  end
+  local fr = frames[idx]
+  local folder = (self.style == "ken" and Kfm.ken) or Kfm.folder
+  local spr = Sheet.get(folder, fr[1])
+  if not spr then return false end
+  local ax, ay, w = fr[2], fr[3], fr[4] or spr.width
+  -- A folha do Kung Fu Man olha para a direita. O Ryu olha para a esquerda.
+  local flipped = self.face < 0
+  local x = self.x - (w - ax)
+  if flipped then x = self.x - ax end
+  ui.spr(spr, math.floor(x), math.floor(self.y - ay), flipped)
+  return true
+end
+
 function Fighter:draw_sheet()
   local who = self:defs()
   local frame = self:cur()
@@ -956,7 +1043,7 @@ end
 
 function Fighter:draw()
   Screen.rect(self.x - 28, self.y - 4, 56, 4, Screen.SHADOW)
-  if not self:draw_sheet() then self:draw_body() end
+  if not self:draw_kfm() and not self:draw_sheet() then self:draw_body() end
 end
 
 return Fighter

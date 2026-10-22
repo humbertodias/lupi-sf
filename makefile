@@ -27,8 +27,8 @@ RYU_DIR     := $(ASSETS_DIR)/02_Ryu
 KEN_DIR     := $(ASSETS_DIR)/11_Ken
 EFFECTS_DIR := $(ASSETS_DIR)/22_Ingame Effects
 
-assets: $(RYU_DIR)/.stamp $(KEN_DIR)/.stamp $(ASSETS_DIR)/22_Ingame\ Effects/.stamp
-	@echo "Sprites em $(ASSETS_DIR)"
+assets: $(ASSETS_DIR)/22_Ingame\ Effects/.stamp
+	@echo "Efeitos em $(ASSETS_DIR). Ryu e Ken nao entram: o lutador e o Kung Fu Man."
 
 $(CACHE_DIR):
 	mkdir -p $@
@@ -77,19 +77,28 @@ clean-assets:
 	rm -rf $(RYU_DIR) $(KEN_DIR) "$(EFFECTS_DIR)" $(CACHE_DIR)
 
 sprites:
-	python3 "$(MAKEFILE_DIR)tools/pack_sprites.py"
+	python3 "$(MAKEFILE_DIR)tools/pack_kfm.py"
 	python3 "$(MAKEFILE_DIR)tools/build_defs.py"
 
 defs:
 	python3 "$(MAKEFILE_DIR)tools/build_defs.py"
 
-game/codec: defs
+KFM_PNG := $(MAKEFILE_DIR)Assets/kfm/kungfu.png
+
+src/kfm.lua: $(KFM_PNG)
+	python3 "$(MAKEFILE_DIR)tools/pack_kfm.py"
+
+game/codec: defs src/kfm.lua
 	rm -rf "$(MAKEFILE_DIR)dist" "$(STAGE)"
 	mkdir -p "$(STAGE)/states" "$(STAGE)/sfx"
 	cp "$(MAKEFILE_DIR)game.lua" "$(STAGE)/game.lua"
 	cp "$(MAKEFILE_DIR)src/"*.lua "$(STAGE)/"
 	cp "$(MAKEFILE_DIR)src/states/"*.lua "$(STAGE)/states/"
-	if [ -d "$(MAKEFILE_DIR)media/img" ]; then cp -R "$(MAKEFILE_DIR)media/img" "$(STAGE)/img"; fi
+	if [ -d "$(MAKEFILE_DIR)media/img" ]; then \
+	  mkdir -p "$(STAGE)/img"; \
+	  tar -C "$(MAKEFILE_DIR)media/img" --exclude '02_Ryu' --exclude '11_Ken' -cf - . \
+	    | tar -C "$(STAGE)/img" -xf -; \
+	fi
 	mkdir -p "$(STAGE)/sfx"
 	cp "$(MAKEFILE_DIR)media/sfx/"*.ogg "$(STAGE)/sfx/"
 	cd "$(MAKEFILE_DIR)lupi-codec" && lua run.lua "$(STAGE)" "$(MAKEFILE_DIR)dist"
